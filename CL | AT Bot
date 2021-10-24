@@ -1,0 +1,261 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import time
+import openpyxl
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.keys import Keys
+import os
+from datetime import datetime
+import smtplib
+from selenium.webdriver.chrome.service import Service
+
+
+
+EMAIL_ADDRESS = "boardwalkbot@gmail.com"
+EMAIL_PASSWORD = "%Knuckleheads!"
+
+percentageCap = 1.4
+
+chrome_options = Options()
+chrome_options.add_argument("--test-type")
+chrome_options.add_argument("--disable-gpu")
+chrome_options.add_argument("--no-first-run")
+chrome_options.add_argument("--no-default-browser-check")
+chrome_options.add_argument("--ignore-certificate-errors")
+chrome_options.add_argument("--start-maximized")
+# chrome_options.add_argument('headless')
+
+service = Service("/Users/bdonbright/Desktop/chromedriver94")
+driver = webdriver.Chrome(service=service)
+
+#driver = webdriver.Chrome("/Users/bdonbright/Desktop/chromedriver94", options=chrome_options)
+
+
+
+def sendvehicle(v):
+    smtp = smtplib.SMTP('smtp.gmail.com', 587)
+    smtp.ehlo()
+    smtp.starttls()
+    smtp.ehlo()
+    smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+    #msg = f"link: {v[3]}, kbblink: {v[4]}. percentage: {v[5]}"
+    msg = v[5]#f"yoyo{v[3]}"
+    print("msg:", str(msg))
+    smtp.sendmail(EMAIL_ADDRESS, EMAIL_ADDRESS, msg)
+
+def saveToExcel(list):
+    wb = openpyxl.load_workbook("botresults.xlsx")
+    sh = wb["Sheet1"]
+    mrow = sh.max_row + 1
+    for i in range(1,len(list)+1):
+        sh.cell(row = mrow, column = i, value = list[i-1])
+    wb.save(f"botresults.xlsx")
+
+def makeModelAdjust(make,model):
+    # check the makes of the vehicles
+    if (make == "infinity") or (make == "infinti") or (make == "Infinity"): make = "infiniti"
+    if (make == "vw") or (make == "VW"): make = "volkswagen"
+    if (make == "nissqn") or (make == "Nissqn"): make = "nissan"
+    if (make == "chevy"): make = "chevrolet"
+    if (make == "chysler"): make = "chrysler"
+    if make == "Mercedes-AMG":
+        make = "Mercedes-Benz"
+    if make == "land":
+        make = "land-rover"
+
+    # check the models of the vehicles
+    if (model == "3"):
+        if (make == "mazda") or (make == "Mazda"): model = "mazda3"
+
+    if (model == "grand") or (model == "Grand"):
+        if (make == "dodge") or (make == "Dodge"): model = "grand-caravan"
+        if (make == "jeep") or (make == "Jeep"): model = "grand-cherokee"
+
+    if (model == "1500"):
+        if (make == "dodge"): model = "ram-1500"
+        if (make == "chevrolet"): model = "silverado-1500"
+
+    if (model == "ram"): model = "ram-1500"
+    if (model == "crv"): model = "cr-v"
+    if (model == "hrv") or (model == "HRV"): model = "hr-v"
+    if (model == "sierra"): model = "sierra-1500"
+    if (model == "silverado") or (model == "Silverado"): model = "silverado-1500"
+    if (model == "mazdaspeed3"): model = "mazda3"
+    if (model == "g37xs") or (model == "g37s") or (model == "g37x"): model = "g37"
+    if (model == "g35xs") or (model == "g35s") or (model == "g35x"): model = "g35"
+    if (model == "econoline") or (model == "Econoline"): model = "e-350"
+    if (model == "Santa") or (model == "santa") or (model == "sanata") or (model == "Sanata"): model = "sonata"
+    if (model == "b200") or (model == "B200") or (model == "b250") or (model == "B250"): model = "b-class"
+    if (model == "c300") or (model == "C300") or (model == "c350") or (model == "C350") or (model == "c250") or \
+            (model == "C250") or (model == "c240") or (model == "C240") or (model == "c230") or \
+            (model == "C230") or (model == "e350") or (model == "E350") or (model == "e320") \
+            or (model == "E320"): model = "c-class"
+    if (model == "glk350") or (model == "GLK350"): model = "glk-class"
+    if (model == "cx3") or (model == "CX3") or (model == "Cx3"): model = "cx-3"
+    if (model == "miata") or (model == "Miata") or (model == "mx5") or (model == "MX5"): model = "mx-5"
+
+    porsche718s = ["cayman", "boxter", "spyder"]
+    for nmodel in porsche718s:
+        if nmodel == model:
+            model = f"718-{model}"
+
+    fordSuperdutys = ["f-350", "f-250"]
+    for nmodel in fordSuperdutys:
+        if nmodel == model:
+            model = f"super-duty-{model}"
+
+    if model == "jk":
+        model = "wrangler-jk-unlimited"
+
+    if model == "sl-class":
+        model = "dont capture"
+
+    if make.lower() == "bmw":
+        if model[0].isnumeric():
+            model = f"{model[0]}-series"
+
+    if make.lower() == "mercedes-benz":
+        for idx, val in enumerate(model):
+            if val.isnumeric():
+                model = ''.join(model[0:idx])
+
+        model = model + "-class"
+
+    makemodel = [make, model]
+    return makemodel
+
+cappedVehicles = []
+worthVehicles = []
+
+for i in range(1):
+    # collect AT links, price, and odometers
+    ATlist = []
+    ATlink = f"http://www.autotrader.ca/cars/bc/port%20coquitlam/?rcp=100&rcs=0&srt=9&yRng=2002%2C&prx=100&prv=British%20Columbia&loc=V3B%208C2&hprc=True&wcp=True&sts=Used&adtype=Private&showcpo=1&inMarket=advancedSearch"
+    driver.get(ATlink)
+    ATadlist = driver.find_elements(By.CLASS_NAME,"result-title")
+    ATpricelist = driver.find_elements(By.CLASS_NAME,"price-amount")
+    ATodolist = driver.find_elements(By.CLASS_NAME,"kms")
+    # grab kbblinks from AT links
+    for i in range(len(ATodolist)):
+        title = ATadlist[i].get_attribute("text").split()
+        price = ATpricelist[i].text
+        price = price.replace("$","")
+        price = price.replace(",","")
+        odo = ATodolist[i].text
+        odo = odo.replace("Mileage ","")
+        odo = odo.replace(" km","")
+        odo = odo.replace(",","")
+        link = ATadlist[i].get_attribute("href")
+        linkparts = link.split("/")
+        if "%" in linkparts[5]:
+            trim = ' '.join(title[4:])
+            linkparts[5] = linkparts[5].replace("%20","-")
+        else:
+            trim = ' '.join(title[3:])
+        kbblink = f"https://kbb.ca/{linkparts[4]}/{linkparts[5]}/{title[0]}"
+        vInfo = [trim,price,odo,link,kbblink]
+        ATlist.append(vInfo)# trim price mileage link kbblink
+
+
+
+
+    # collect CL links, price, and odometers
+    linklist = []
+    CLlist = []
+    CLlink = "https://vancouver.craigslist.org/d/cars-trucks-by-owner/search/cto?s=0&auto_title_status=1&bundleDuplicates=1&max_price=300000&min_auto_year=2002&min_price=20000"
+    driver.get(CLlink)
+    CLadlist = driver.find_elements(By.CLASS_NAME,"result-title")
+    for i in CLadlist:
+        link = i.get_attribute("href")
+        linklist.append(link)
+
+    # grab kbblinks from CL links
+    for l in linklist:
+        try:
+            driver.get(l)
+            mmy = driver.find_element(By.XPATH, "/html/body/section/section/section/div[1]/p[1]/span/b").text.split()
+            if len(mmy) > 2:
+                odometer = str(driver.find_element(By.XPATH,"//*[contains(text(), 'odometer')]").text)
+                odometer = int(odometer[10:])
+                if (odometer < 1000):
+                        odometer = odometer * 1000
+                price = driver.find_element(By.XPATH, "/html/body/section/section/h1/span/span[2]").text
+                price = price.replace('$', '')  ## remove $ and , from price
+                price = price.replace(',', '')
+                price = int(price)
+                year = mmy[0]
+                mmy.remove(year)
+                if year in mmy:
+                    mmy.remove(year)
+                if(len(mmy) > 1):
+                    make = mmy[0]
+                    mmy.remove(make)
+                    model = mmy[0]
+                    make, model = makeModelAdjust(make, model)
+                CLkbblink = f"https://kbb.ca/{make}/{model}/{year}"
+                vinfo = ["n/a",price,odometer,l,CLkbblink]
+                CLlist.append(vinfo)
+
+        except Exception as e:
+            print(e)
+    #
+    # create a combined list of objects with [price,odometer,link,kbblink]
+    #
+
+    # vehicleList = CLlist
+    # vehicleList = ATlist
+    vehicleList = CLlist + ATlist
+    for v in vehicleList:
+        link = v[4]
+        driver.get(link)
+        try:
+            trimCode = "//*[contains(text(), '%s')]" % v[0]
+            trimElements = driver.find_elements(By.XPATH, trimCode)
+            if (len(trimElements) > 2):
+                trimWords = driver.find_elements_by_xpath(trimCode)
+                trimButton = trimWords[2].find_element_by_xpath("..")
+                trimCaptured = True
+                print("trim capture successful")
+            else:
+                firstTrim = driver.find_element(By.CSS_SELECTOR, "body > div.main > div.mainContent > div.innerContent > div:nth-child(2) > div:nth-child(1) > table > tbody > tr:nth-child(1) > td:nth-child(6) > a > span.nextArrow")
+                trimButton = firstTrim.find_element_by_xpath("..")
+            buttonLink = trimButton.get_attribute("href")
+            if buttonLink is not None:
+                kbbparts = buttonLink.split("/")
+                kbblink = f"{link}/{kbbparts[-2]}/used/selling/price/{kbbparts[-1]}"
+                v[4] = kbblink
+                driver.get(kbblink)
+                mileage = driver.find_element(By.XPATH, "/html/body/div[2]/div[2]/div[3]/div[2]/div[1]/div[2]/div[2]/div[1]/div[2]/input")
+                mileage.send_keys(Keys.ENTER)
+                mileage.send_keys(Keys.BACKSPACE)
+                mileage.send_keys(Keys.BACKSPACE)
+                mileage.send_keys(Keys.BACKSPACE)
+                mileage.send_keys(Keys.BACKSPACE)
+                mileage.send_keys(Keys.BACKSPACE)
+                mileage.send_keys(Keys.BACKSPACE)
+                mileage.send_keys(Keys.BACKSPACE)
+                mileage.send_keys(v[2])
+                mileage.send_keys(Keys.ENTER)
+                time.sleep(1.8)
+                priceAmount = driver.find_element(By.CSS_SELECTOR, "#RightRectangle > text > tspan:nth-child(2)").text
+                priceString = str(priceAmount)
+                priceString = priceString.replace('$', '')  ## remove $ and , from price
+                priceString = priceString.replace(',', '')
+                percentage = int(v[1])/int(priceString)
+                print(v)
+                v.append(v[1])
+                v.append(priceString)
+                v.append(percentage)
+                print(percentage)
+                if percentage < percentageCap:
+                    if v not in cappedVehicles:
+                        v.append(datetime.today().strftime('%Y-%m-%d'))
+                        cappedVehicles.append(v)
+                        saveToExcel(v)
+                        sendvehicle(v)
+
+
+
+        except Exception as e:
+            print(e)
